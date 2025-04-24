@@ -89,13 +89,12 @@ async function getDiff(options) {
 
 // Format and style the review sections
 async function formatReviewSection(text) {
-  const separators = ['🔥', '⚠️', '💩', '🛠️', '🔒'];
   const sections = text.split('\n\n');
   let formatted = '';
 
-  sections.forEach((section, i) => {
+  sections.forEach(section => {
     if (section.trim()) {
-      formatted += `\n${styles.section(`${separators[i % separators.length]}  ${section.trim()}`)}\n`;
+      formatted += `\n${styles.section(section.trim())}\n`;
     }
   });
 
@@ -123,7 +122,7 @@ ${diff}`;
 
 async function main() {
   try {
-    console.log(styles.header('\n🔍 Git Diff Reviewer powered by Gemini AI\n'));
+    console.log(styles.header('\nGit Diff Reviewer powered by Gemini AI\n'));
 
     // Show help if no options provided
     if (!options.commit && !options.branch && !options.last) {
@@ -148,11 +147,11 @@ async function main() {
       spinner.succeed(styles.success('AI review completed'));
 
       // Output header and review
-      console.log(styles.header('\n📋  BRUTAL CODE REVIEW RESULTS  📋\n'));
+      console.log(styles.header('\nCODE REVIEW RESULTS\n'));
       console.log(styles.info('='.repeat(50)));
       console.log(review);
       console.log(styles.info('='.repeat(50)));
-      console.log(styles.success('\n✨ Review completed successfully!\n'));
+      console.log(styles.success('\nReview completed successfully!\n'));
 
     } catch (aiError) {
       spinner.fail(styles.error('AI Review Failed'));
