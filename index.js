@@ -5,28 +5,26 @@ import dotenv from 'dotenv';
 import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
-import { marked } from 'marked';
-import Box from 'cli-box';
 
 // Load environment variables
 dotenv.config();
 
 // Console styling
 const styles = {
-  header: chalk.bold.blue,
+  header: chalk.bold.cyan,
   success: chalk.green,
   error: chalk.red,
   warning: chalk.yellow,
   info: chalk.cyan,
-  section: chalk.magenta,
-  code: chalk.gray
+  section: chalk.blue,
+  code: chalk.blue.dim
 };
 
 const git = simpleGit();
 
 // Initialize the Google AI client
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
 
 // Setup CLI options
 program
@@ -89,50 +87,15 @@ async function getDiff(options) {
   }
 }
 
-// Convert markdown to styled console output
-function renderMarkdown(text) {
-  // Remove HTML tags that marked might generate
-  text = text.replace(/<[^>]*>/g, '');
-
-  // Style code blocks
-  text = text.replace(/```[\s\S]+?```/g, match => {
-    return styles.code(match.slice(3, -3));
-  });
-
-  // Style inline code
-  text = text.replace(/`([^`]+)`/g, (_, code) => styles.code(code));
-
-  // Style bold text
-  text = text.replace(/\*\*([^*]+)\*\*/g, (_, bold) => styles.header(bold));
-
-  return text;
-}
-
+// Format and style the review sections
 async function formatReviewSection(text) {
-  // Add some visual flair to the review sections
   const separators = ['🔥', '⚠️', '💩', '🛠️', '🔒'];
   const sections = text.split('\n\n');
   let formatted = '';
 
   sections.forEach((section, i) => {
     if (section.trim()) {
-      const sectionBox = Box({
-        w: process.stdout.columns - 4,
-        h: 'auto',
-        stringify: false,
-        marks: {
-          nw: '╭',
-          n: '─',
-          ne: '╮',
-          e: '│',
-          se: '╯',
-          s: '─',
-          sw: '╰',
-          w: '│'
-        },
-        content: styles.section(`${separators[i % separators.length]} ${renderMarkdown(section.trim())}`)
-      });
-      formatted += '\n' + sectionBox + '\n';
+      formatted += `\n${styles.section(`${separators[i % separators.length]}  ${section.trim()}`)}\n`;
     }
   });
 
@@ -184,40 +147,11 @@ async function main() {
       const review = await getAIReview(diff);
       spinner.succeed(styles.success('AI review completed'));
 
-      // Output the review sections
-      const titleBox = Box({
-        w: process.stdout.columns - 4,
-        h: 3,
-        stringify: false,
-        marks: {
-          nw: '╔',
-          n: '═',
-          ne: '╗',
-          e: '║',
-          se: '╝',
-          s: '═',
-          sw: '╚',
-          w: '║'
-        },
-        content: styles.header('📋  BRUTAL CODE REVIEW RESULTS  📋')
-      });
-
-      console.log('\n' + titleBox);
-
-      // Display the formatted review
+      // Output header and review
+      console.log(styles.header('\n📋  BRUTAL CODE REVIEW RESULTS  📋\n'));
+      console.log(styles.info('='.repeat(50)));
       console.log(review);
-
-      // Bottom border
-      console.log(Box({
-        w: process.stdout.columns - 4,
-        h: 1,
-        stringify: false,
-        marks: {
-          nw: '╠',
-          n: '═',
-          ne: '╣'
-        }
-      }));
+      console.log(styles.info('='.repeat(50)));
       console.log(styles.success('\n✨ Review completed successfully!\n'));
 
     } catch (aiError) {
