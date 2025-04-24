@@ -3,15 +3,28 @@ import simpleGit from 'simple-git';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import path from 'path';
+import chalk from 'chalk';
+import ora from 'ora';
 
 // Load environment variables
 dotenv.config();
+
+// Console styling
+const styles = {
+  header: chalk.bold.blue,
+  success: chalk.green,
+  error: chalk.red,
+  warning: chalk.yellow,
+  info: chalk.cyan,
+  section: chalk.magenta,
+  code: chalk.gray
+};
 
 const git = simpleGit();
 
 // Initialize the Google AI client
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
 
 // Setup CLI options
 program
@@ -74,13 +87,34 @@ async function getDiff(options) {
   }
 }
 
+async function formatReviewSection(text) {
+  // Add some visual flair to the review sections
+  const separators = ['🔥', '⚠️', '💩', '🛠️', '🔒'];
+  const sections = text.split('\n\n');
+  let formatted = '';
+
+  sections.forEach((section, i) => {
+    if (section.trim()) {
+      formatted += `\n${styles.section(`${separators[i % separators.length]} ${section.trim()}`)}\n`;
+    }
+  });
+
+  return formatted;
+}
+
 async function getAIReview(diff) {
   try {
-    const prompt = `You are a thorough code reviewer. Please review the following git diff and provide detailed feedback on code quality, potential issues, and suggestions for improvement:\n\n${diff}`;
+    const prompt = `You are an uncompromising, brutally honest code reviewer with zero tolerance for mediocrity. Rip apart the following git diff with extreme prejudice. Expose every flaw, no matter how trivial—sloppy style, performance blunders, maintainability disasters, or boneheaded design choices. Demand perfection in logic, readability, and efficiency. Don't coddle; be harsh, direct, and scathing like Linus Torvalds in a bad mood. Ignore security unless it's glaringly catastrophic. Provide specific, actionable improvements for every criticism, and don't let a single line of garbage slip through. If it's not flawless, call it out and explain why it's a failure.
+
+Separate your brutal takedown into sections with two newlines between each savage critique.
+
+Here's the code to destroy:
+
+${diff}`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    return response.text();
+    return await formatReviewSection(response.text());
   } catch (error) {
     console.error('Error getting AI review:', error);
     process.exit(1);
@@ -89,6 +123,8 @@ async function getAIReview(diff) {
 
 async function main() {
   try {
+    console.log(styles.header('\n🔍 Git Diff Reviewer powered by Gemini AI\n'));
+
     // Show help if no options provided
     if (!options.commit && !options.branch && !options.last) {
       program.help();
@@ -96,31 +132,40 @@ async function main() {
     }
 
     // Get the diff based on provided options
+    const spinner = ora('Fetching git diff...').start();
     const diff = await getDiff(options);
 
     if (!diff) {
-      console.log('No changes found to review.');
+      spinner.fail(styles.warning('No changes found to review.'));
       process.exit(0);
     }
+    spinner.succeed(styles.success('Git diff retrieved successfully'));
 
-    console.log('Getting code review from AI...\n');
-
+    // Get AI review
+    spinner.start('Analyzing code changes with AI...');
     try {
-      // Get AI review
       const review = await getAIReview(diff);
+      spinner.succeed(styles.success('AI review completed'));
 
-      // Output the review
-      console.log('Code Review Results:\n');
+      // Output the review sections with slight delays for readability
+      console.log(styles.header('\n📋 Code Review Results'));
+      console.log(styles.info('='.repeat(50)));
+
+      // Display the formatted review
       console.log(review);
-      console.log('\nReview completed successfully.');
+
+      console.log(styles.info('='.repeat(50)));
+      console.log(styles.success('\n✨ Review completed successfully!\n'));
+
     } catch (aiError) {
-      console.error('Error getting AI review:', aiError.message);
-      console.error('The diff was retrieved successfully, but the AI review failed.');
+      spinner.fail(styles.error('AI Review Failed'));
+      console.error(styles.error('Error getting AI review:'), aiError.message);
+      console.error(styles.warning('The diff was retrieved successfully, but the AI review failed.'));
       process.exit(1);
     }
 
   } catch (error) {
-    console.error('Error:', error.message || error);
+    console.error(styles.error('Error:'), error.message || error);
     process.exit(1);
   }
 }
