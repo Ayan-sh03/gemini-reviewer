@@ -1,0 +1,16 @@
+{
+  "name": "git-diff-reviewer",
+  "version": "1.0.0",
+  "description": "A tool to review git diffs using Gemini AI",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "simple-git": "^3.22.0",
+    "commander": "^12.0.0",
+    "@google/generative-ai": "^0.8.0",
+    "dotenv": "^16.4.1"
+  }
+}
