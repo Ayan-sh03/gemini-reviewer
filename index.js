@@ -103,13 +103,7 @@ async function formatReviewSection(text) {
 
 async function getAIReview(diff) {
   try {
-    const prompt = `You are an uncompromising, brutally honest code reviewer with zero tolerance for mediocrity. Rip apart the following git diff with extreme prejudice. Expose every flaw, no matter how trivial—sloppy style, performance blunders, maintainability disasters, or boneheaded design choices. Demand perfection in logic, readability, and efficiency. Don't coddle; be harsh, direct, and scathing like Linus Torvalds in a bad mood. Ignore security unless it's glaringly catastrophic. Provide specific, actionable improvements for every criticism, and don't let a single line of garbage slip through. If it's not flawless, call it out and explain why it's a failure.
-
-Separate your brutal takedown into sections with two newlines between each savage critique.
-
-Here's the code to destroy:
-
-${diff}`;
+    const prompt = `You are a ruthless code destroyer, channeling Linus Torvalds at his angriest. Annihilate the following git diff. Rip apart every line for logic flaws, performance stupidity, unreadable mess, or brain-dead design. No error is too minor—crappy naming, inconsistent formatting, or wasteful loops, obliterate them. Ignore security unless it’s a complete disaster. For every flaw, deliver exact, no-nonsense fixes. If it’s not flawless code, burn it down and explain why it’s garbage.\n\n${diff}`
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
