@@ -7,17 +7,21 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
-    "dev:run": "node dist/index.js -l "
+    "dev:run": "node dist/index.js -l ",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "dependencies": {
-    "simple-git": "^3.22.0",
-    "commander": "^12.0.0",
     "@google/generative-ai": "^0.8.0",
-    "dotenv": "^16.4.1",
     "chalk": "^5.3.0",
-    "ora": "^7.0.1"
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.1",
+    "ora": "^7.0.1",
+    "simple-git": "^3.22.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/node": "^20.11.30",
     "typescript": "^5.4.3"
   }
