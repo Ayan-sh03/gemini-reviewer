@@ -32,6 +32,7 @@ interface ProgramOptions {
   branch?: string;
   last?: boolean;
   output?: string;
+  exclude?: string[];
 }
 
 // Setup CLI options
@@ -41,6 +42,7 @@ program
   .option('-b, --branch <name>', 'Compare with branch')
   .option('-l, --last', 'Compare with last commit (default)')
   .option('-o, --output <file>', 'Write review output to a file')
+  .option('--exclude <patterns...>', 'Exclude files/directories matching these patterns')
   .parse(process.argv);
 
 const options: ProgramOptions = program.opts();
@@ -56,10 +58,13 @@ async function getDiff(options: ProgramOptions): Promise<string> {
       return '';
     }
 
+    // Prepare exclude patterns
+    const excludeArgs = options.exclude?.flatMap(pattern => [':(exclude)', pattern]) ?? [];
+
     if (options.commit) {
       // For specific commit
       try {
-        diff = await git.diff([options.commit]);
+        diff = await git.diff([...excludeArgs, options.commit]);
       } catch (_err) {
         console.error(`Error: Invalid commit hash or commit not found: ${options.commit}`);
         process.exit(1);
@@ -72,7 +77,7 @@ async function getDiff(options: ProgramOptions): Promise<string> {
           console.error(`Error: Branch 'origin/${options.branch}' not found`);
           process.exit(1);
         }
-        diff = await git.diff([`origin/${options.branch}`]);
+        diff = await git.diff([...excludeArgs, `origin/${options.branch}`]);
       } catch (err) {
         const error = err as Error;
         console.error(`Error accessing branch: ${error.message}`);
@@ -83,10 +88,10 @@ async function getDiff(options: ProgramOptions): Promise<string> {
       if (commitCount === 1) {
         // For the first commit, compare with empty tree
         const emptyTree = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'; // Git empty tree hash
-        diff = await git.diff([emptyTree, 'HEAD']);
+        diff = await git.diff([...excludeArgs, emptyTree, 'HEAD']);
       } else {
         // Normal case - compare with previous commit
-        diff = await git.diff(['HEAD^', 'HEAD']);
+        diff = await git.diff([...excludeArgs, 'HEAD^', 'HEAD']);
       }
     }
 
@@ -110,6 +115,10 @@ async function formatReviewSection(text: string): Promise<string> {
   }
 
   return formatted;
+}
+
+function stripAnsiCodes(str: string): string {
+  return str.replace(/\x1B[[(?);]{0,2}(;?\d)*./g, '');
 }
 
 async function getAiReview(diff: string): Promise<string> {
@@ -146,7 +155,7 @@ ${diff}
       `;
 
     const result = await model.generateContent(prompt);
-    const response = await result.response;
+    const response = result.response;
     return await formatReviewSection(response.text());
   } catch (error) {
     const err = error as Error;
@@ -160,49 +169,65 @@ async function main(): Promise<void> {
     console.log(styles.header('\nGit Diff Reviewer powered by Gemini AI\n'));
 
     // Show help if no options provided
-    if (!options.commit && !options.branch && !options.last) {
+    if (!options.commit && !options.branch && !options.last && !options.output) {
       program.help();
-      return;
+    }
+
+    // Set default option to --last if no other options are provided
+    if (!options.commit && !options.branch && !options.last) {
+      options.last = true;
     }
 
     // Get the diff based on provided options
     const spinner = ora('Fetching git diff...').start();
-    const diff = await getDiff(options);
+    let diff: string;
+    try {
+      diff = await getDiff(options);
+      spinner.succeed(styles.success('Git diff retrieved successfully'));
+    } catch (err) {
+      spinner.fail(styles.error('Failed to fetch git diff'));
+      console.error(styles.error((err as Error).message));
+      process.exit(1);
+    }
 
     if (!diff) {
       spinner.fail(styles.warning('No changes found to review.'));
       process.exit(0);
     }
-    spinner.succeed(styles.success('Git diff retrieved successfully'));
 
-    // Get AI review
     spinner.start('Analyzing code changes with AI...');
+    let review: string;
     try {
-      const review = await getAiReview(diff);
+      review = await getAiReview(diff);
       spinner.succeed(styles.success('AI review completed'));
+    } catch (aiError) {
+      spinner.fail(styles.error('AI Review Failed'));
+      const err = aiError as Error;
+      console.error(styles.error('Error getting AI review:'), err.message);
+      console.error(styles.warning('The diff was retrieved successfully, but the AI review failed.'));
+      process.exit(1);
+    }
 
+    spinner.start('Formatting review output...');
+    try {
       // Output header and review
       if (options.output) {
-        try {
-          fs.writeFileSync(options.output, review, 'utf-8');
-          console.log(styles.success(`\nReview written to file: ${options.output}\n`));
-        } catch (err) {
-          console.error(styles.error(`Failed to write review to file: ${options.output}`));
-          console.error(styles.error((err as Error).message));
-          process.exit(1);
-        }
+        // Strip ANSI codes from both review content and any styling
+        const formattedReview = `CODE REVIEW RESULTS\n\n${review}`;
+        const cleanReview = stripAnsiCodes(formattedReview);
+        await fs.promises.writeFile(options.output, cleanReview, 'utf-8');
+        spinner.succeed(styles.success(`Review written to file: ${options.output}`));
       } else {
+        spinner.succeed(styles.success('Review formatted successfully'));
         console.log(styles.header('\nCODE REVIEW RESULTS\n'));
         console.log(styles.info('='.repeat(50)));
         console.log(review);
         console.log(styles.info('='.repeat(50)));
         console.log(styles.success('\nReview completed successfully!\n'));
       }
-    } catch (aiError) {
-      const err = aiError as Error;
-      spinner.fail(styles.error('AI Review Failed'));
-      console.error(styles.error('Error getting AI review:'), err.message);
-      console.error(styles.warning('The diff was retrieved successfully, but the AI review failed.'));
+    } catch (err) {
+      spinner.fail(styles.error('Failed to write or format review output'));
+      console.error(styles.error((err as Error).message));
       process.exit(1);
     }
   } catch (error) {
