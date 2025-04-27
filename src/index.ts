@@ -4,7 +4,7 @@ import { program } from 'commander';
 import dotenv from 'dotenv';
 import ora from 'ora';
 import { type SimpleGit, simpleGit } from 'simple-git';
-
+import fs from 'fs';
 // Load environment variables
 dotenv.config();
 
@@ -31,6 +31,7 @@ interface ProgramOptions {
   commit?: string;
   branch?: string;
   last?: boolean;
+  output?: string;
 }
 
 // Setup CLI options
@@ -39,6 +40,7 @@ program
   .option('-c, --commit <hash>', 'Compare with specific commit')
   .option('-b, --branch <name>', 'Compare with branch')
   .option('-l, --last', 'Compare with last commit (default)')
+  .option('-o, --output <file>', 'Write review output to a file')
   .parse(process.argv);
 
 const options: ProgramOptions = program.opts();
@@ -180,11 +182,22 @@ async function main(): Promise<void> {
       spinner.succeed(styles.success('AI review completed'));
 
       // Output header and review
-      console.log(styles.header('\nCODE REVIEW RESULTS\n'));
-      console.log(styles.info('='.repeat(50)));
-      console.log(review);
-      console.log(styles.info('='.repeat(50)));
-      console.log(styles.success('\nReview completed successfully!\n'));
+      if (options.output) {
+        try {
+          fs.writeFileSync(options.output, review, 'utf-8');
+          console.log(styles.success(`\nReview written to file: ${options.output}\n`));
+        } catch (err) {
+          console.error(styles.error(`Failed to write review to file: ${options.output}`));
+          console.error(styles.error((err as Error).message));
+          process.exit(1);
+        }
+      } else {
+        console.log(styles.header('\nCODE REVIEW RESULTS\n'));
+        console.log(styles.info('='.repeat(50)));
+        console.log(review);
+        console.log(styles.info('='.repeat(50)));
+        console.log(styles.success('\nReview completed successfully!\n'));
+      }
     } catch (aiError) {
       const err = aiError as Error;
       spinner.fail(styles.error('AI Review Failed'));
