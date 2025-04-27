@@ -1,6 +1,7 @@
 import { type GenerativeModel, GoogleGenerativeAI } from '@google/generative-ai';
 import chalk from 'chalk';
 import { program } from 'commander';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import ora from 'ora';
 import { type SimpleGit, simpleGit } from 'simple-git';
@@ -128,6 +129,85 @@ function stripAnsiCodes(str: string): string {
   return str.replace(/\x1B[[(?);]{0,2}(;?\d)*./g, '');
 }
 
+// Cache configuration
+const CACHE_DIR = '.gitreview-cache';
+const CACHE_VERSION = '1'; // Increment this when prompt format changes
+
+interface CacheEntry {
+  version: string;
+  modelId: string;
+  template: string;
+  focus?: string[];
+  ignore?: string[];
+  review: string;
+}
+
+// Ensure cache directory exists
+if (!fs.existsSync(CACHE_DIR)) {
+  fs.mkdirSync(CACHE_DIR);
+}
+
+// Generate a unique hash for the diff and review configuration
+function generateCacheKey(diff: string, options: ProgramOptions): string {
+  const configString = JSON.stringify({
+    diff,
+    template: options.template,
+    focus: options.focus,
+    ignore: options.ignore,
+    modelId: process.env.MODEL_ID,
+    version: CACHE_VERSION,
+  });
+  return crypto.createHash('sha256').update(configString).digest('hex');
+}
+
+// Try to get a cached review
+async function getCachedReview(cacheKey: string): Promise<string | null> {
+  try {
+    const cachePath = path.join(CACHE_DIR, `${cacheKey}.json`);
+    if (!fs.existsSync(cachePath)) {
+      return null;
+    }
+
+    const cacheContent = await fs.promises.readFile(cachePath, 'utf-8');
+    const cache: CacheEntry = JSON.parse(cacheContent);
+
+    // Validate cache entry
+    if (
+      cache.version !== CACHE_VERSION ||
+      cache.modelId !== process.env.MODEL_ID ||
+      cache.template !== (options.template || 'default') ||
+      JSON.stringify(cache.focus) !== JSON.stringify(options.focus) ||
+      JSON.stringify(cache.ignore) !== JSON.stringify(options.ignore)
+    ) {
+      return null;
+    }
+
+    return cache.review;
+  } catch (err) {
+    console.error(styles.warning('Cache read error:'), (err as Error).message);
+    return null;
+  }
+}
+
+// Save a review to cache
+async function cacheReview(cacheKey: string, review: string): Promise<void> {
+  try {
+    const cacheEntry: CacheEntry = {
+      version: CACHE_VERSION,
+      modelId: process.env.MODEL_ID ?? '',
+      template: options.template || 'default',
+      focus: options.focus,
+      ignore: options.ignore,
+      review,
+    };
+
+    const cachePath = path.join(CACHE_DIR, `${cacheKey}.json`);
+    await fs.promises.writeFile(cachePath, JSON.stringify(cacheEntry, null, 2));
+  } catch (err) {
+    console.error(styles.warning('Cache write error:'), (err as Error).message);
+  }
+}
+
 // Load a prompt template and substitute variables
 async function loadTemplate(templateName: string = 'default'): Promise<string> {
   try {
@@ -142,6 +222,15 @@ async function loadTemplate(templateName: string = 'default'): Promise<string> {
 
 async function getAiReview(diff: string): Promise<string> {
   try {
+    // Check cache first
+    const cacheKey = generateCacheKey(diff, options);
+    const cachedReview = await getCachedReview(cacheKey);
+
+    if (cachedReview) {
+      console.log(styles.info('\nUsing cached review result'));
+      return cachedReview;
+    }
+
     // Load the appropriate template
     const template = await loadTemplate(options.template);
 
@@ -161,8 +250,13 @@ async function getAiReview(diff: string): Promise<string> {
       .replace('${ignoreInstructions}', ignoreInstructions);
 
     const result = await model.generateContent(prompt);
-    const response = result.response;
-    return await formatReviewSection(response.text());
+    const response = await result.response;
+    const review = await formatReviewSection(response.text());
+
+    // Cache the review result
+    await cacheReview(cacheKey, review);
+
+    return review;
   } catch (error) {
     const err = error as Error;
     console.error('Error getting AI review:', err);
