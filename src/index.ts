@@ -1,8 +1,7 @@
 import { program } from 'commander';
-import simpleGit from 'simple-git';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { simpleGit, SimpleGit } from 'simple-git';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import dotenv from 'dotenv';
-import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 
@@ -20,11 +19,17 @@ const styles = {
   code: chalk.blue.dim
 };
 
-const git = simpleGit();
+const git: SimpleGit = simpleGit();
 
 // Initialize the Google AI client
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
+const model: GenerativeModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
+
+interface ProgramOptions {
+  commit?: string;
+  branch?: string;
+  last?: boolean;
+}
 
 // Setup CLI options
 program
@@ -34,11 +39,11 @@ program
   .option('-l, --last', 'Compare with last commit (default)')
   .parse(process.argv);
 
-const options = program.opts();
+const options: ProgramOptions = program.opts();
 
-async function getDiff(options) {
+async function getDiff(options: ProgramOptions): Promise<string> {
   try {
-    let diff;
+    let diff: string;
     const hasCommits = await git.raw(['rev-list', 'HEAD', '--count']);
     const commitCount = parseInt(hasCommits.trim());
 
@@ -65,7 +70,8 @@ async function getDiff(options) {
         }
         diff = await git.diff([`origin/${options.branch}`]);
       } catch (err) {
-        console.error(`Error accessing branch: ${err.message}`);
+        const error = err as Error;
+        console.error(`Error accessing branch: ${error.message}`);
         process.exit(1);
       }
     } else {
@@ -82,13 +88,14 @@ async function getDiff(options) {
 
     return diff || '';
   } catch (error) {
-    console.error('Error getting git diff:', error.message);
+    const err = error as Error;
+    console.error('Error getting git diff:', err.message);
     process.exit(1);
   }
 }
 
 // Format and style the review sections
-async function formatReviewSection(text) {
+async function formatReviewSection(text: string): Promise<string> {
   const sections = text.split('\n\n');
   let formatted = '';
 
@@ -101,20 +108,50 @@ async function formatReviewSection(text) {
   return formatted;
 }
 
-async function getAIReview(diff) {
+async function getAIReview(diff: string): Promise<string> {
   try {
-    const prompt = `You are a ruthless code destroyer, channeling Linus Torvalds at his angriest. Annihilate the following git diff. Rip apart every line for logic flaws, performance stupidity, unreadable mess, or brain-dead design. No error is too minor—crappy naming, inconsistent formatting, or wasteful loops, obliterate them. Ignore security unless it’s a complete disaster. For every flaw, deliver exact, no-nonsense fixes. If it’s not flawless code, burn it down and explain why it’s garbage.\n\n${diff}`
+    const prompt = `
+    You are a veteran code reviewer with decades of experience, specializing in ruthless but precise critique. Analyze the following git diff with surgical precision. For each code change:
+
+1. Reference specific line numbers
+2. Identify critical issues first:
+   - Logic errors and edge cases
+   - Performance bottlenecks and complexity problems
+   - Design flaws and architectural mistakes
+   - Maintainability concerns
+   - Poor abstractions or patterns
+
+3. Then address secondary concerns:
+   - Naming conventions
+   - Code style inconsistencies
+   - Missing comments or documentation
+   - Test coverage gaps
+
+    For each identified issue:
+    - Provide the exact location (file:line)
+    - Explain precisely why it's problematic
+    - Show a concrete code fix in a diff-like format:
+      diff
+    - problematic code
+      + improved code
+    Briefly explain why your solution is better
+
+    Be brutally honest but technically sound - focus on substance over style. Prioritize serious problems that affect functionality, performance, or maintainability. Skip trivial issues if there are major concerns to address.
+${diff}
+
+      `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     return await formatReviewSection(response.text());
   } catch (error) {
-    console.error('Error getting AI review:', error);
+    const err = error as Error;
+    console.error('Error getting AI review:', err);
     process.exit(1);
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   try {
     console.log(styles.header('\nGit Diff Reviewer powered by Gemini AI\n'));
 
@@ -148,14 +185,16 @@ async function main() {
       console.log(styles.success('\nReview completed successfully!\n'));
 
     } catch (aiError) {
+      const err = aiError as Error;
       spinner.fail(styles.error('AI Review Failed'));
-      console.error(styles.error('Error getting AI review:'), aiError.message);
+      console.error(styles.error('Error getting AI review:'), err.message);
       console.error(styles.warning('The diff was retrieved successfully, but the AI review failed.'));
       process.exit(1);
     }
 
   } catch (error) {
-    console.error(styles.error('Error:'), error.message || error);
+    const err = error as Error;
+    console.error(styles.error('Error:'), err.message || err);
     process.exit(1);
   }
 }

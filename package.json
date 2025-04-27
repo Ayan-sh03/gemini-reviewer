@@ -2,10 +2,12 @@
   "name": "git-diff-reviewer",
   "version": "1.0.0",
   "description": "A tool to review git diffs using Gemini AI",
-  "main": "index.js",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "dev:run": "node dist/index.js -l "
   },
   "dependencies": {
     "simple-git": "^3.22.0",
@@ -14,5 +16,9 @@
     "dotenv": "^16.4.1",
     "chalk": "^5.3.0",
     "ora": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "typescript": "^5.4.3"
   }
 }
