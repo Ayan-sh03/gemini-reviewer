@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import ora from 'ora';
 import { type SimpleGit, simpleGit } from 'simple-git';
 import fs from 'fs';
+import path from 'path';
 // Load environment variables
 dotenv.config();
 
@@ -35,6 +36,7 @@ interface ProgramOptions {
   exclude?: string[];
   focus?: string[];
   ignore?: string[];
+  template?: string;
 }
 
 // Setup CLI options
@@ -47,6 +49,7 @@ program
   .option('--exclude <patterns...>', 'Exclude files/directories matching these patterns')
   .option('--focus <areas...>', 'Focus review on specific areas (e.g., security, performance)')
   .option('--ignore <areas...>', 'Ignore specific areas in review')
+  .option('--template <name>', 'Use a specific review template (default, security, performance)')
   .parse(process.argv);
 
 const options: ProgramOptions = program.opts();
@@ -125,9 +128,24 @@ function stripAnsiCodes(str: string): string {
   return str.replace(/\x1B[[(?);]{0,2}(;?\d)*./g, '');
 }
 
+// Load a prompt template and substitute variables
+async function loadTemplate(templateName: string = 'default'): Promise<string> {
+  try {
+    const templatePath = path.join('prompts', `${templateName}.txt`);
+    return await fs.promises.readFile(templatePath, 'utf-8');
+  } catch (err) {
+    console.error(styles.error(`Failed to load template '${templateName}'. Using default template.`));
+    const defaultPath = path.join('prompts', 'default.txt');
+    return await fs.promises.readFile(defaultPath, 'utf-8');
+  }
+}
+
 async function getAiReview(diff: string): Promise<string> {
   try {
-    // Construct focus and ignore instructions based on options
+    // Load the appropriate template
+    const template = await loadTemplate(options.template);
+
+    // Construct focus and ignore instructions
     const focusInstructions = options.focus?.length
       ? `\nSpecifically focus on and prioritize these areas in your review:\n${options.focus.map(area => `- ${area}`).join('\n')}`
       : '';
@@ -136,38 +154,11 @@ async function getAiReview(diff: string): Promise<string> {
       ? `\nSkip or minimize attention to these areas unless critical:\n${options.ignore.map(area => `- ${area}`).join('\n')}`
       : '';
 
-    const prompt = `
-    You are a veteran code reviewer with decades of experience, specializing in ruthless but precise critique. Analyze the following git diff with surgical precision.${focusInstructions}${ignoreInstructions}
-
-For each code change:
-
-1. Reference specific line numbers
-2. Identify critical issues first:
-   - Logic errors and edge cases
-   - Performance bottlenecks and complexity problems
-   - Design flaws and architectural mistakes
-   - Maintainability concerns
-   - Poor abstractions or patterns
-
-3. Then address secondary concerns:
-   - Naming conventions
-   - Code style inconsistencies
-   - Missing comments or documentation
-   - Test coverage gaps
-
-    For each identified issue:
-    - Provide the exact location (file:line)
-    - Explain precisely why it's problematic
-    - Show a concrete code fix in a diff-like format:
-      diff
-    - problematic code
-      + improved code
-    Briefly explain why your solution is better
-
-    Be brutally honest but technically sound - focus on substance over style. Prioritize serious problems that affect functionality, performance, or maintainability. Skip trivial issues if there are major concerns to address.
-${diff}
-
-      `;
+    // Replace template variables
+    const prompt = template
+      .replace('${diff}', diff)
+      .replace('${focusInstructions}', focusInstructions)
+      .replace('${ignoreInstructions}', ignoreInstructions);
 
     const result = await model.generateContent(prompt);
     const response = result.response;
