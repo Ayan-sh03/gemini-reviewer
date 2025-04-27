@@ -7,18 +7,20 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
-    "dev:run": "node dist/index.js -l "
+    "dev:run": "node dist/index.js -l ",
+    "test": "vitest run"
   },
   "dependencies": {
-    "simple-git": "^3.22.0",
-    "commander": "^12.0.0",
-    "@google/generative-ai": "^0.8.0",
+    "@google/generative-ai": "^0.24.0",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
     "dotenv": "^16.4.1",
-    "chalk": "^5.3.0",
-    "ora": "^7.0.1"
+    "ora": "^8.2.0",
+    "simple-git": "^3.22.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.30",
-    "typescript": "^5.4.3"
+    "@types/node": "^22.15.2",
+    "typescript": "^5.4.3",
+    "vitest": "^3.1.2"
   }
 }

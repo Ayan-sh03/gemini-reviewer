@@ -28,7 +28,7 @@ program
     .option('-l, --last', 'Compare with last commit (default)')
     .parse(process.argv);
 const options = program.opts();
-async function getDiff(options) {
+export async function getDiff(options) {
     try {
         let diff;
         const hasCommits = await git.raw(['rev-list', 'HEAD', '--count']);
@@ -84,7 +84,7 @@ async function getDiff(options) {
     }
 }
 // Format and style the review sections
-async function formatReviewSection(text) {
+export async function formatReviewSection(text) {
     const sections = text.split('\n\n');
     let formatted = '';
     sections.forEach(section => {
@@ -94,7 +94,7 @@ async function formatReviewSection(text) {
     });
     return formatted;
 }
-async function getAIReview(diff) {
+export async function getAIReview(diff) {
     try {
         const prompt = `
     You are a veteran code reviewer with decades of experience, specializing in ruthless but precise critique. Analyze the following git diff with surgical precision. For each code change:

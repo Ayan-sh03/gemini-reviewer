@@ -41,7 +41,7 @@ program
 
 const options: ProgramOptions = program.opts();
 
-async function getDiff(options: ProgramOptions): Promise<string> {
+export async function getDiff(options: ProgramOptions): Promise<string> {
   try {
     let diff: string;
     const hasCommits = await git.raw(['rev-list', 'HEAD', '--count']);
@@ -57,22 +57,19 @@ async function getDiff(options: ProgramOptions): Promise<string> {
       try {
         diff = await git.diff([options.commit]);
       } catch (err) {
-        console.error(`Error: Invalid commit hash or commit not found: ${options.commit}`);
-        process.exit(1);
+        throw new Error(`Invalid commit hash or commit not found: ${options.commit}`);
       }
     } else if (options.branch) {
       // For branch comparison
       try {
         const branches = await git.branch();
         if (!branches.all.includes(`remotes/origin/${options.branch}`)) {
-          console.error(`Error: Branch 'origin/${options.branch}' not found`);
-          process.exit(1);
+          throw new Error(`Branch 'origin/${options.branch}' not found`);
         }
         diff = await git.diff([`origin/${options.branch}`]);
       } catch (err) {
         const error = err as Error;
-        console.error(`Error accessing branch: ${error.message}`);
-        process.exit(1);
+        throw new Error(`Error accessing branch: ${error.message}`);
       }
     } else {
       // Default to last commit
@@ -89,13 +86,12 @@ async function getDiff(options: ProgramOptions): Promise<string> {
     return diff || '';
   } catch (error) {
     const err = error as Error;
-    console.error('Error getting git diff:', err.message);
-    process.exit(1);
+    throw new Error(`Error getting git diff: ${err.message}`);
   }
 }
 
 // Format and style the review sections
-async function formatReviewSection(text: string): Promise<string> {
+export async function formatReviewSection(text: string): Promise<string> {
   const sections = text.split('\n\n');
   let formatted = '';
 
@@ -108,7 +104,7 @@ async function formatReviewSection(text: string): Promise<string> {
   return formatted;
 }
 
-async function getAIReview(diff: string): Promise<string> {
+export async function getAIReview(diff: string): Promise<string> {
   try {
     const prompt = `
     You are a veteran code reviewer with decades of experience, specializing in ruthless but precise critique. Analyze the following git diff with surgical precision. For each code change:
@@ -146,8 +142,7 @@ ${diff}
     return await formatReviewSection(response.text());
   } catch (error) {
     const err = error as Error;
-    console.error('Error getting AI review:', err);
-    process.exit(1);
+    throw new Error(`Error getting AI review: ${err}`);
   }
 }
 
@@ -194,8 +189,7 @@ async function main(): Promise<void> {
 
   } catch (error) {
     const err = error as Error;
-    console.error(styles.error('Error:'), err.message || err);
-    process.exit(1);
+    throw err;
   }
 }
 
