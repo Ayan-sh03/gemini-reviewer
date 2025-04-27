@@ -33,6 +33,8 @@ interface ProgramOptions {
   last?: boolean;
   output?: string;
   exclude?: string[];
+  focus?: string[];
+  ignore?: string[];
 }
 
 // Setup CLI options
@@ -43,6 +45,8 @@ program
   .option('-l, --last', 'Compare with last commit (default)')
   .option('-o, --output <file>', 'Write review output to a file')
   .option('--exclude <patterns...>', 'Exclude files/directories matching these patterns')
+  .option('--focus <areas...>', 'Focus review on specific areas (e.g., security, performance)')
+  .option('--ignore <areas...>', 'Ignore specific areas in review')
   .parse(process.argv);
 
 const options: ProgramOptions = program.opts();
@@ -123,8 +127,19 @@ function stripAnsiCodes(str: string): string {
 
 async function getAiReview(diff: string): Promise<string> {
   try {
+    // Construct focus and ignore instructions based on options
+    const focusInstructions = options.focus?.length
+      ? `\nSpecifically focus on and prioritize these areas in your review:\n${options.focus.map(area => `- ${area}`).join('\n')}`
+      : '';
+
+    const ignoreInstructions = options.ignore?.length
+      ? `\nSkip or minimize attention to these areas unless critical:\n${options.ignore.map(area => `- ${area}`).join('\n')}`
+      : '';
+
     const prompt = `
-    You are a veteran code reviewer with decades of experience, specializing in ruthless but precise critique. Analyze the following git diff with surgical precision. For each code change:
+    You are a veteran code reviewer with decades of experience, specializing in ruthless but precise critique. Analyze the following git diff with surgical precision.${focusInstructions}${ignoreInstructions}
+
+For each code change:
 
 1. Reference specific line numbers
 2. Identify critical issues first:
